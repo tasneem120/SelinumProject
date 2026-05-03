@@ -20,6 +20,18 @@ public class Cart {
     static final String CART_URL     = BASE_URL + "/view_cart";
     static final String PRODUCTS_URL = BASE_URL + "/products";
     static final String LOGIN_URL    = BASE_URL + "/login";
+    static final String[] PRODUCT_URLS = {
+            BASE_URL + "/product_details/11",
+            BASE_URL + "/product_details/12",
+            BASE_URL + "/product_details/3",   // Sleeveless Dress  – Rs. 1000
+            BASE_URL + "/product_details/4",   // Stylish Dress     – Rs. 2150
+            BASE_URL + "/product_details/5",   // Winter Top        – Rs. 600
+            BASE_URL + "/product_details/6",   // Summer White Top  – Rs. 400
+            BASE_URL + "/product_details/7",   // Madame Top        – Rs. 1000
+            BASE_URL + "/product_details/8",   // Master            – Rs. 2200
+            BASE_URL + "/product_details/13",   // Cotton Mull       – Rs. 3500
+            BASE_URL + "/product_details/14"   // Fancy Green Top   – Rs. 700
+    };
 
     static final String VALID_EMAIL    = "eaya5317@gmail.com";
     static final String VALID_PASSWORD = "PK7iyS2cTKd3fX@";
@@ -100,6 +112,21 @@ public class Cart {
         wait.until(ExpectedConditions.invisibilityOfElementLocated(
                 By.cssSelector("div.modal-content")
         ));
+    }
+    // ADD THIS — used in TC-048 to check if the page overflows horizontally
+    private boolean hasHorizontalOverflow() {
+        Long scrollWidth = (Long) ((JavascriptExecutor) driver)
+                .executeScript("return document.body.scrollWidth;");
+        Long clientWidth = (Long) ((JavascriptExecutor) driver)
+                .executeScript("return document.body.clientWidth;");
+        return scrollWidth > clientWidth + 5;
+    }
+
+    // ADD THIS — used in TC-046, TC-048 to reach the footer
+    private void scrollToBottom() {
+        ((JavascriptExecutor) driver)
+                .executeScript("window.scrollTo(0, document.body.scrollHeight);");
+        try { Thread.sleep(500); } catch (InterruptedException ignored) {}
     }
 
     private String getCartQuantityText(int rowIndex) {
@@ -479,4 +506,68 @@ public class Cart {
                 "Expected copyright year 2021 in footer, but got: " + footer.getText());
     }
 
+
+    @Test(priority = 39,
+            description = "TC-047: 5 distinct products each appear as a separate row with valid data")
+    public void TC047_fiveProductsAllAppearInCart() {
+        for (int i = 0; i < 5; i++) {
+            addProductToCart(PRODUCT_URLS[i], 1);
+        }
+        driver.get(CART_URL);
+
+        int rowCount = getCartRowCount();
+        Assert.assertEquals(rowCount, 5,
+                "Expected 5 rows for 5 distinct products. Found: " + rowCount);
+
+        List<WebElement> names = driver.findElements(
+                By.cssSelector(".cart_description h4 a")
+        );
+        for (int i = 0; i < names.size(); i++) {
+            String name = names.get(i).getText().trim();
+            Assert.assertFalse(name.isEmpty(),
+                    "Row " + (i + 1) + " has an empty product name.");
+        }
+
+        for (int i = 0; i < 5; i++) {
+            String total = getCartTotalText(i);
+            Assert.assertFalse(total.isEmpty(),
+                    "Row " + (i + 1) + " total cell is empty.");
+            Assert.assertFalse(total.toUpperCase().contains("NAN"),
+                    "Row " + (i + 1) + " shows NaN in total: " + total);
+        }
+    }
+
+
+    @Test(priority = 40,
+            description = "TC-048: Cart page has no overflow and footer/checkout remain accessible with 10 items")
+    public void TC048_cartPageLayoutWithTenItems() {
+        for (String url : PRODUCT_URLS) {
+            addProductToCart(url, 1);
+        }
+        driver.get(CART_URL);
+
+        Assert.assertFalse(hasHorizontalOverflow(),
+                "Page has horizontal overflow with 10 items — content is cut off.");
+
+        int rowCount = getCartRowCount();
+        Assert.assertEquals(rowCount, 10,
+                "Expected 10 rows for 10 products. Found: " + rowCount);
+
+        WebElement checkoutBtn = wait.until(
+                ExpectedConditions.elementToBeClickable(
+                        By.cssSelector(".btn.btn-default.check_out")
+                )
+        );
+        Assert.assertTrue(checkoutBtn.isDisplayed(),
+                "'Proceed to Checkout' not visible with 10 items.");
+        Assert.assertTrue(checkoutBtn.isEnabled(),
+                "'Proceed to Checkout' is disabled with 10 items.");
+
+        scrollToBottom();
+        WebElement footer = wait.until(
+                ExpectedConditions.visibilityOfElementLocated(By.id("footer"))
+        );
+        Assert.assertTrue(footer.isDisplayed(),
+                "Footer not visible after scrolling with 10 items in cart.");
+    }
 }
